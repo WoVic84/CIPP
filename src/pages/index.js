@@ -32,16 +32,6 @@ const Page = () => {
     queryKey: `${currentTenant}-ListuserCounts`,
   });
 
-  const GlobalAdminList = ApiGetCall({
-    url: "/api/ListGraphRequest",
-    queryKey: `${currentTenant}-ListGraphRequest`,
-    data: {
-      tenantFilter: currentTenant,
-      Endpoint: "/directoryRoles(roleTemplateId='62e90394-69f5-4237-9190-012177145e10')/members",
-      $select: "displayName,userPrincipalName,accountEnabled",
-    },
-  });
-
   const sharepoint = ApiGetCall({
     url: "/api/ListSharepointQuota",
     queryKey: `${currentTenant}-ListSharepointQuota`,
@@ -213,6 +203,7 @@ const Page = () => {
   );
 
   const [PortalMenuItems, setPortalMenuItems] = useState([]);
+  const [partnersVisible, setPartnersVisible] = useState(false);
 
   const formatStorageSize = (sizeInMB) => {
     if (sizeInMB >= 1024) {
@@ -247,7 +238,7 @@ const Page = () => {
     }
 
     // Filter the portals based on user settings
-    return Portals.filter(portal => {
+    return Portals.filter((portal) => {
       const settingKey = portal.name;
       return settingKey ? portalLinks[settingKey] === true : true;
     });
@@ -258,10 +249,10 @@ const Page = () => {
       const tenantLookup = currentTenantInfo.data?.find(
         (tenant) => tenant.defaultDomainName === currentTenant
       );
-      
+
       // Get filtered portals based on user preferences
       const filteredPortals = getFilteredPortals();
-      
+
       const menuItems = filteredPortals.map((portal) => ({
         label: portal.label,
         target: "_blank",
@@ -270,14 +261,19 @@ const Page = () => {
       }));
       setPortalMenuItems(menuItems);
     }
-  }, [currentTenantInfo.isSuccess, currentTenant, settings.portalLinks, settings.UserSpecificSettings]);
+  }, [
+    currentTenantInfo.isSuccess,
+    currentTenant,
+    settings.portalLinks,
+    settings.UserSpecificSettings,
+  ]);
 
   return (
     <>
       <Head>
         <title>Dashboard</title>
       </Head>
-      <Box sx={{ flexGrow: 1, py: 4 }}>
+      <Box sx={{ flexGrow: 1, pb: 4 }}>
         <Container maxWidth={false}>
           <Grid container spacing={3}>
             <Grid size={{ md: 12, xs: 12 }}>
@@ -293,11 +289,12 @@ const Page = () => {
                     tenantId={organization.data?.id}
                     userStats={{
                       licensedUsers: dashboard.data?.LicUsers || 0,
-                      unlicensedUsers: dashboard.data?.Users && dashboard.data?.LicUsers && GlobalAdminList.data?.Results && dashboard.data?.Guests
-                        ? dashboard.data?.Users - dashboard.data?.LicUsers - dashboard.data?.Guests - GlobalAdminList.data?.Results?.length
-                        : 0,
+                      unlicensedUsers:
+                        dashboard.data?.Users && dashboard.data?.LicUsers
+                          ? dashboard.data?.Users - dashboard.data?.LicUsers
+                          : 0,
                       guests: dashboard.data?.Guests || 0,
-                      globalAdmins: GlobalAdminList.data?.Results?.length || 0
+                      globalAdmins: dashboard.data?.Gas || 0,
                     }}
                     standardsData={driftApi.data}
                     organizationData={organization.data}
@@ -316,23 +313,17 @@ const Page = () => {
             <Grid size={{ md: 4, xs: 12 }}>
               <CippChartCard
                 title="User Statistics"
-                isFetching={dashboard.isFetching || GlobalAdminList.isFetching}
+                isFetching={dashboard.isFetching}
                 chartType="pie"
+                totalLabel="Total Users"
+                customTotal={dashboard.data?.Users}
                 chartSeries={[
                   Number(dashboard.data?.LicUsers || 0),
-                  dashboard.data?.Users &&
-                  dashboard.data?.LicUsers &&
-                  GlobalAdminList.data?.Results &&
-                  dashboard.data?.Guests
-                    ? Number(
-                        dashboard.data?.Users -
-                          dashboard.data?.LicUsers -
-                          dashboard.data?.Guests -
-                          GlobalAdminList.data?.Results?.length
-                      )
+                  dashboard.data?.Users && dashboard.data?.LicUsers
+                    ? Number(dashboard.data?.Users - dashboard.data?.LicUsers)
                     : 0,
                   Number(dashboard.data?.Guests || 0),
-                  Number(GlobalAdminList.data?.Results?.length || 0),
+                  Number(dashboard.data?.Gas || 0),
                 ]}
                 labels={["Licensed Users", "Unlicensed Users", "Guests", "Global Admins"]}
               />
@@ -359,7 +350,7 @@ const Page = () => {
                         "Aligned Policies",
                         "Accepted Deviations",
                         "Current Deviations",
-                        "Customer Specific Deviations"
+                        "Customer Specific Deviations",
                       ]
                     : ["Remediation", "Alert", "Report"]
                 }
@@ -413,10 +404,20 @@ const Page = () => {
                 copyItems={true}
                 title="Partner Relationships"
                 isFetching={partners.isFetching}
-                propertyItems={partners.data?.Results.map((partner, idx) => ({
+                propertyItems={partners.data?.Results?.slice(
+                  0,
+                  partnersVisible ? undefined : 3
+                ).map((partner, idx) => ({
                   label: partner.TenantInfo?.displayName,
                   value: partner.TenantInfo?.defaultDomainName,
                 }))}
+                actionButton={
+                  partners.data?.Results?.length > 3 && (
+                    <Button onClick={() => setPartnersVisible(!partnersVisible)}>
+                      {partnersVisible ? "See less" : "See more..."}
+                    </Button>
+                  )
+                }
               />
             </Grid>
 
@@ -460,7 +461,6 @@ const Page = () => {
           </Grid>
         </Container>
       </Box>
-      
     </>
   );
 };
